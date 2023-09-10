@@ -1,10 +1,8 @@
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import javafx.application.Application;
-import javafx.geometry.Insets;
-import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
@@ -12,15 +10,18 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 import java.net.Socket;
-
+import java.util.ArrayList;
+import java.util.List;
 
 public class Cliente extends Application {
     private static final int GRID_SIZE = 4;
     private static final double POINT_RADIUS = 10.0;
     private ObjectMapper objectMapper;
-    private GridPane gridPane;
-    private double[] selectedCoordinates = new double[4]; // Para almacenar las coordenadas de los puntos seleccionados
-    private Line line;
+    private Pane pane;
+    private Circle[] circles = new Circle[GRID_SIZE * GRID_SIZE];
+    private Circle selectedCircle;
+    private List<Line> lines = new ArrayList<>(); // Lista para mantener las líneas dibujadas
+
     public static void main(String[] args) {
         launch(args);
     }
@@ -28,10 +29,9 @@ public class Cliente extends Application {
     @Override
     public void start(Stage primaryStage) {
         objectMapper = new ObjectMapper();
-        gridPane = new GridPane();
+        pane = new Pane();
         createPointGrid();
-        gridPane.setAlignment(Pos.CENTER);
-        Scene scene = new Scene(gridPane, 600, 600);
+        Scene scene = new Scene(pane, 600, 600);
         primaryStage.setScene(scene);
         primaryStage.setTitle("Cliente");
         primaryStage.show();
@@ -41,50 +41,39 @@ public class Cliente extends Application {
     private void createPointGrid() {
         for (int row = 0; row < GRID_SIZE; row++) {
             for (int col = 0; col < GRID_SIZE; col++) {
-                Circle circle = new Circle(POINT_RADIUS, Color.BLACK);
-                // Agregar un margen a cada círculo
-                GridPane.setMargin(circle, new Insets(70, 30, 30, 70)); // Ajusta los valores según tus necesidades
-                gridPane.add(circle, col, row);
-                int finalRow = row; // Declarar finalRow como efectivamente final
-                int finalCol = col; // Declarar finalCol como efectivamente final
-                circle.setOnMouseClicked(event -> {
-                    double x = finalCol; // Multiplica por 2 para aumentar la distancia
-                    double y = finalRow; // Multiplica por 2 para aumentar la distancia
-                    // Almacenar las coordenadas de los puntos seleccionados
-                    if (selectedCoordinates[0] == 0) {
-                        selectedCoordinates[0] = x;
-                        selectedCoordinates[1] = y;
-                    } else if (selectedCoordinates[2] == 0) {
-                        selectedCoordinates[2] = x;
-                        selectedCoordinates[3] = y;
+                Circle circle = new Circle((col + 0.5) * 600 / GRID_SIZE, (row + 0.5) * 600 / GRID_SIZE, POINT_RADIUS, Color.BLACK);
+                circles[row * GRID_SIZE + col] = circle;
+                pane.getChildren().add(circle);
 
-                        // Crear la línea y agregarla a la escena
-                        enviarCoordenadas(selectedCoordinates);
-                        drawLine(selectedCoordinates);
-                        selectedCoordinates = new double[4]; // Reiniciar el arreglo
+                circle.setOnMouseClicked(event -> {
+                    if (selectedCircle == null) {
+                        selectedCircle = circle;
+                    } else if (selectedCircle != circle) {
+                        drawLine(selectedCircle, circle);
+                        selectedCircle = null; // Reiniciar la selección
                     }
-                    System.out.println("Coordenada en [" + finalRow + "][" + finalCol + "]: X=" + x + ", Y=" + y);
                 });
             }
         }
     }
 
-    private void drawLine(double[] coordinates) {
-        if (line != null) {
-            gridPane.getChildren().remove(line); // Eliminar la línea anterior
+    private void drawLine(Circle startCircle, Circle endCircle) {
+        double startX = startCircle.getCenterX();
+        double startY = startCircle.getCenterY();
+        double endX = endCircle.getCenterX();
+        double endY = endCircle.getCenterY();
+
+        // Verificar si los puntos son adyacentes en sentido horizontal o vertical
+        double gridSize = 600.0 / GRID_SIZE;
+        if ((Math.abs(startX - endX) == gridSize && Math.abs(startY - endY) < 1) ||
+            (Math.abs(startY - endY) == gridSize && Math.abs(startX - endX) < 1)) {
+            Line line = new Line(startX, startY, endX, endY);
+            lines.add(line); // Agregar la línea a la lista
+            pane.getChildren().add(line); // Agregar la línea a la escena
+            enviarCoordenadas(startX, startY, endX, endY);
         }
-
-        // Convertir las coordenadas de la matriz a las coordenadas de la interfaz
-        double x1 = coordinates[0] * 60 + 70;
-        double y1 = coordinates[1] * 60 + 70;
-        double x2 = coordinates[2] * 60 + 70;
-        double y2 = coordinates[3] * 60 + 70;
-
-        // Crear la línea
-        line = new Line(x1, y1, x2, y2);
-        gridPane.getChildren().add(line);
     }
-    
+
     private void connectToServer() {
         String servidorHost = "localhost"; // Cambia esto al servidor real
         int servidorPuerto = 12345; // Cambia esto al puerto del servidor real
@@ -95,17 +84,17 @@ public class Cliente extends Application {
         }
     }
 
-    private void enviarCoordenadas(double[] coordinates) {
+    private void enviarCoordenadas(double startX, double startY, double endX, double endY) {
         try (Socket socket = new Socket("localhost", 12345)) {
             // Crear un array JSON de coordenadas
             ArrayNode coordenadas = objectMapper.createArrayNode();
-            coordenadas.add(coordinates[0]);
-            coordenadas.add(coordinates[1]);
-            coordenadas.add(coordinates[2]);
-            coordenadas.add(coordinates[3]);
+            coordenadas.add(startX);
+            coordenadas.add(startY);
+            coordenadas.add(endX);
+            coordenadas.add(endY);
             // Enviar el array JSON al servidor
             objectMapper.writeValue(socket.getOutputStream(), coordenadas);
-            System.out.println("Coordenadas enviadas al servidor: " + coordinates[0] + ", " + coordinates[1] + " y " + coordinates[2] + ", " + coordinates[3]);
+            System.out.println("Coordenadas enviadas al servidor: " + startX + ", " + startY + " y " + endX + ", " + endY);
         } catch (IOException e) {
             e.printStackTrace();
         }
