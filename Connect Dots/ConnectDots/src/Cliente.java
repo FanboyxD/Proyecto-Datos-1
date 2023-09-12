@@ -21,7 +21,7 @@ public class Cliente extends Application {
     private Circle[] circles = new Circle[GRID_SIZE * GRID_SIZE];
     private Circle selectedCircle;
     private List<Line> lines = new ArrayList<>(); // Lista para mantener las líneas dibujadas
-
+    private Socket socket;
     public static void main(String[] args) {
         launch(args);
     }
@@ -77,22 +77,22 @@ public class Cliente extends Application {
     private void connectToServer() {
         String servidorHost = "localhost"; // Cambia esto al servidor real
         int servidorPuerto = 12345; // Cambia esto al puerto del servidor real
-        try (Socket socket = new Socket(servidorHost, servidorPuerto)) {
-            // No es necesario hacer nada aquí, solo conectarse al servidor.
+        try {
+            socket = new Socket(servidorHost, servidorPuerto); // Crea la conexión al servidor
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     private void enviarCoordenadas(double startX, double startY, double endX, double endY) {
-        try (Socket socket = new Socket("localhost", 12345)) {
+        try {
             // Crear un array JSON de coordenadas
             ArrayNode coordenadas = objectMapper.createArrayNode();
             coordenadas.add(startX);
             coordenadas.add(startY);
             coordenadas.add(endX);
             coordenadas.add(endY);
-            // Enviar el array JSON al servidor
+            // Enviar el array JSON al servidor a través del socket existente
             objectMapper.writeValue(socket.getOutputStream(), coordenadas);
             System.out.println("Coordenadas enviadas al servidor: " + startX + ", " + startY + " y " + endX + ", " + endY);
         } catch (IOException e) {
