@@ -1,6 +1,7 @@
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
@@ -35,7 +36,7 @@ public class Cliente extends Application {
         primaryStage.setScene(scene);
         primaryStage.setTitle("Cliente");
         primaryStage.show();
-        connectToServer();
+        socket = connectToServer();
     }
 
     private void createPointGrid() {
@@ -74,27 +75,40 @@ public class Cliente extends Application {
         }
     }
 
-    private void connectToServer() {
+    private Socket connectToServer() {
         String servidorHost = "localhost"; // Cambia esto al servidor real
         int servidorPuerto = 12345; // Cambia esto al puerto del servidor real
         try {
-            socket = new Socket(servidorHost, servidorPuerto); // Crea la conexión al servidor
+            Socket socket = new Socket(servidorHost, servidorPuerto); // Crea la conexión al servidor
+            return socket;
         } catch (IOException e) {
             e.printStackTrace();
+            return null;
         }
     }
 
     private void enviarCoordenadas(double startX, double startY, double endX, double endY) {
         try {
-            // Crear un array JSON de coordenadas
-            ArrayNode coordenadas = objectMapper.createArrayNode();
-            coordenadas.add(startX);
-            coordenadas.add(startY);
-            coordenadas.add(endX);
-            coordenadas.add(endY);
-            // Enviar el array JSON al servidor a través del socket existente
-            objectMapper.writeValue(socket.getOutputStream(), coordenadas);
-            System.out.println("Coordenadas enviadas al servidor: " + startX + ", " + startY + " y " + endX + ", " + endY);
+            // Crear un nuevo socket para cada par de coordenadas
+            try (Socket socket = new Socket("localhost", 12345)) {
+                // Crear un array JSON de coordenadas
+                ArrayNode coordenadas = objectMapper.createArrayNode();
+                coordenadas.add(startX);
+                coordenadas.add(startY);
+                coordenadas.add(endX);
+                coordenadas.add(endY);
+
+                // Enviar el array JSON al servidor a través del socket
+                objectMapper.writeValue(socket.getOutputStream(), coordenadas);
+                System.out.println("Coordenadas enviadas al servidor: " + startX + ", " + startY + " y " + endX + ", " + endY);
+            }
+
+            // Agrega la línea a la lista local de líneas dibujadas
+            Platform.runLater(() -> {
+                Line line = new Line(startX, startY, endX, endY);
+                lines.add(line);
+                pane.getChildren().add(line);
+            });
         } catch (IOException e) {
             e.printStackTrace();
         }
